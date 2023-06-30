@@ -1,0 +1,8 @@
+{
+  "venueId": "test",
+  "printerIp": "192.168.0.55",
+  "username": "dkprint",
+  "password": "dkprint",
+  "pollIntervalSeconds": 5,
+  "hostName": "http://64.226.90.94:8080"
+}

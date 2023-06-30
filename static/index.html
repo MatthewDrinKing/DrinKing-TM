@@ -1,0 +1,201 @@
+<html>
+  <script src="./epos-2.22.0.js" type="text/javascript"></script>
+  <script
+    type="text/javascript"
+    src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.2/jquery.min.js"
+  ></script>
+
+  <script>
+    var printer = null;
+
+    var config;
+
+    $(function () {
+      $.getJSON("config.json", function (data) {
+        config = data;
+
+        const venueId = config.venueId;
+
+        document.getElementById("printerIp").value = config.printerIp;
+
+        window.consoleLog = function (message) {
+          var consoleMessage = `${new Date().toISOString()} - ${message}`;
+          document.getElementById("consoleLog").innerHTML +=
+            consoleMessage + "<br>";
+          console.log(consoleMessage);
+        };
+
+        var consoleLog = window.consoleLog;
+
+        consoleLog("onLoad");
+
+        function onDeviceConnected(device, returnCode) {
+          if (returnCode == "OK") {
+            printer = device;
+            printer.timeout = 45000;
+
+            printer.onreceive = function (response) {
+              consoleLog("Printer response received");
+              consoleLog(response);
+            };
+
+            printer.oncoveropen = function () {
+              consoleLog("Printer opened");
+            };
+
+            executePrint("Connected");
+          } else {
+            consoleLog("Error connecting to server");
+            consoleLog(returnCode);
+            consoleLog(device);
+          }
+        }
+
+        function connectToPrinter(data) {
+          if (data == "OK" || data == "SSL_CONNECT_OK") {
+            epsonDevice.createDevice(
+              "local_printer",
+              epsonDevice.DEVICE_TYPE_PRINTER,
+              { crypto: false, buffer: false },
+              onDeviceConnected
+            );
+          } else {
+            consoleLog(data);
+          }
+        }
+
+        var epsonDevice = new epson.ePOSDevice();
+        epsonDevice.connect(config.printerIp, 8008, connectToPrinter);
+        consoleLog("Connecting to printer at " + config.printerIp + ":8008");
+
+        var lastJob = { id: -1, text: "" };
+
+        function pollServerForNewPrintJobs() {
+          if (!printer) {
+            consoleLog("Printer not connected, exiting.");
+            setTimeout(
+              pollServerForNewPrintJobs,
+              config.pollIntervalSeconds * 1000
+            );
+            return;
+          }
+
+          consoleLog(
+            "Polling server for new print jobs after print ID: " +
+              lastJob.id +
+              "... next poll in " +
+              config.pollIntervalSeconds +
+              " seconds"
+          );
+          fetch(
+            config.hostName +
+              "/api/printJobsAfter/" +
+              lastJob.id +
+              "/" +
+              venueId,
+            {
+              method: "GET",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            }
+          )
+            .then((response) => response.json())
+            .then((data) => {
+              if (data && data.length) {
+                lastJob = data[0];
+                executePrint(data.content);
+              }
+            });
+
+          setTimeout(
+            pollServerForNewPrintJobs,
+            config.pollIntervalSeconds * 1000
+          );
+        }
+
+        pollServerForNewPrintJobs();
+      });
+    });
+
+    function executePrint(text) {
+      if (text === "$$TEST$$") {
+        text = document.getElementsByName("text")[0].value;
+      }
+
+      window.consoleLog("Printing: " + text);
+      printer.addTextLang("en");
+      printer.addText(text + "\n\n\t\n");
+      printer.addText("-----\n\n\t");
+      const printerResult = printer.send();
+      console.log(printerResult);
+    }
+  </script>
+
+  <body
+    style="
+      font-family: Arial, Helvetica, sans-serif;
+      background-color: #f2f2f2;
+      padding: 20px;
+    "
+  >
+    <div style="flex-direction: row; display: flex">
+      <div style="margin-right: 40">
+        <h2>Print App Log:</h2>
+        <div
+          id="consoleLog"
+          style="
+            border: 1px solid black;
+            height: 600;
+            width: 400;
+            padding: 5;
+            overflow-y: scroll;
+            background-color: white;
+          "
+        ></div>
+      </div>
+      <div style="display: flex; flex-direction: column">
+        <h2>Test Print:</h2>
+        PRINTER IP: (change in config.json)<br />
+        <input
+          type="text"
+          id="printerIp"
+          name="printerIp"
+          value="printerIp"
+          readonly
+          style="width: 200px; height: 30px; font-size: 16px"
+        /><br />
+        Note: This will print the text in the box below.<br />
+        Use unix newlines (\\n) to print multiple lines, and \\t for tabs.<br />
+        <form style="flex-grow: 1; display: flex; flex-direction: column">
+          <textarea
+            type="text"
+            name="text"
+            value="text"
+            cols="50"
+            style="flex-grow: 1; height: 100%"
+          ></textarea
+          ><br />
+          <button
+            type="button"
+            onclick="executePrint('$$TEST$$')"
+            style="
+              background-color: #4caf50; /* Green */
+              border: none;
+              color: white;
+              padding: 15px 32px;
+              text-align: center;
+              text-decoration: none;
+              display: inline-block;
+              font-size: 16px;
+              margin: 4px 2px;
+              cursor: pointer;
+            "
+          >
+            Print
+          </button>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>
