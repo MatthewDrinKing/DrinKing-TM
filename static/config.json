@@ -4,5 +4,5 @@
   "username": "dkprint",
   "password": "dkprint",
   "pollIntervalSeconds": 5,
-  "hostName": "http://64.226.90.94:8080"
+  "hostName": "http://64.226.90.94:80"
 }
